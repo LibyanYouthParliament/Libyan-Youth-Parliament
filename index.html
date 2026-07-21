@@ -6,7 +6,7 @@
     <meta name="description" content="الموقع الرسمي للجنة العلاقات ببرلمان شباب ليبيا في ملتقى قوى الشبابية نحو توحيد المؤسسة العسكرية." />
     <title>لجنة العلاقات | برلمان شباب ليبيا</title>
     <link rel="preload" href="assets/forum-hero-optimized.jpg" as="image" fetchpriority="high" />
-    <link rel="stylesheet" href="styles.css?v=4" />
+    <link rel="stylesheet" href="styles.css?v=5" />
   </head>
   <body>
     <header class="site-header" id="top">
@@ -118,7 +118,22 @@
           </div>
         </div>
 
-        <div class="system-workspace">
+        <div class="relations-auth" id="relations-auth">
+          <div class="auth-copy"><span class="auth-icon" aria-hidden="true">⌾</span><div><h3>دخول أعضاء اللجنة</h3><p>سجّل الدخول للوصول إلى السجل المشترك من أي جهاز.</p></div></div>
+          <form class="auth-form" id="relations-login-form">
+            <div class="field"><label for="relations-email">البريد الإلكتروني</label><input id="relations-email" name="email" type="email" autocomplete="username" required placeholder="name@example.com" /></div>
+            <div class="field"><label for="relations-password">كلمة المرور</label><input id="relations-password" name="password" type="password" autocomplete="current-password" required placeholder="كلمة المرور" /></div>
+            <button class="btn btn-primary" type="submit">تسجيل الدخول</button>
+            <p class="auth-status" id="relations-auth-status" role="status"></p>
+          </form>
+        </div>
+
+        <div class="relations-session" id="relations-session" hidden>
+          <span><i aria-hidden="true"></i> متصل بالسجل المشترك</span>
+          <div><small id="relations-user-email"></small><button type="button" id="relations-refresh" title="تحديث البيانات" aria-label="تحديث البيانات">↻</button><button type="button" id="relations-logout">تسجيل الخروج</button></div>
+        </div>
+
+        <div class="system-workspace" id="relations-workspace" hidden>
           <form class="relations-form" id="relations-form">
             <div class="form-title"><div><h3>إضافة جهة تواصل</h3><p>أدخل بيانات الجهة وحدد مسؤول المتابعة.</p></div><span aria-hidden="true">＋</span></div>
             <div class="field"><label for="rel-name">اسم الجهة أو الشخصية</label><input id="rel-name" name="name" required placeholder="مثال: مؤسسة شبابية" /></div>
@@ -176,6 +191,6 @@
       <p>معاً من أجل ليبيا آمنة، موحدة، ومستقرة.</p>
       <small>© <span id="year"></span> جميع الحقوق محفوظة</small>
     </footer>
-    <script src="app.js?v=2"></script>
+    <script src="app.js?v=3"></script>
   </body>
 </html>

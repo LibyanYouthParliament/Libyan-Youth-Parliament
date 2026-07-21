@@ -50,29 +50,86 @@ document.querySelector('#contact-form').addEventListener('submit', (event) => {
 
 document.querySelector('#year').textContent = new Date().getFullYear();
 
-const RELATIONS_STORAGE_KEY = 'youth-parliament-relations-contacts';
-const relationSeed = [
-  { id: 1, name: 'رابطة الشباب الوطني', category: 'شبابية', owner: 'منسق الجهات الشبابية', date: '2026-07-25', status: 'قيد التواصل', note: 'إرسال الدعوة الرسمية ومتابعة تأكيد الحضور' },
-  { id: 2, name: 'إدارة التوجيه المعنوي', category: 'عسكرية', owner: 'منسق الجهات العسكرية', date: '2026-07-23', status: 'تم التواصل', note: 'استلام قائمة المشاركين وتحديد نقطة الاتصال' },
-  { id: 3, name: 'شبكة الإعلام الوطني', category: 'إعلامية', owner: 'منسق الإعلام', date: '2026-07-27', status: 'جديدة', note: 'مناقشة التغطية الإعلامية للملتقى' },
-];
+const SUPABASE_URL = 'https://waglwnkcuhknuwbloudk.supabase.co';
+const SUPABASE_PUBLIC_KEY = 'sb_publishable_3RGh_i8X_KWAv2CwtV1djg_--0hWJVp';
+const SESSION_STORAGE_KEY = 'youth-parliament-relations-session';
 
-function loadRelations() {
-  try {
-    const saved = localStorage.getItem(RELATIONS_STORAGE_KEY);
-    return saved ? JSON.parse(saved) : relationSeed;
-  } catch {
-    return relationSeed;
-  }
-}
-
-let relations = loadRelations();
+let relations = [];
+let session = loadSession();
 const relationsBody = document.querySelector('#relations-table-body');
 const relationsSearch = document.querySelector('#relations-search');
 const relationsFilter = document.querySelector('#relations-filter');
+const relationsWorkspace = document.querySelector('#relations-workspace');
+const relationsAuth = document.querySelector('#relations-auth');
+const relationsSession = document.querySelector('#relations-session');
+const authStatus = document.querySelector('#relations-auth-status');
 
-function persistRelations() {
-  localStorage.setItem(RELATIONS_STORAGE_KEY, JSON.stringify(relations));
+function loadSession() {
+  try {
+    return JSON.parse(localStorage.getItem(SESSION_STORAGE_KEY)) || null;
+  } catch {
+    return null;
+  }
+}
+
+function saveSession(nextSession) {
+  session = nextSession;
+  if (session) localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(session));
+  else localStorage.removeItem(SESSION_STORAGE_KEY);
+}
+
+async function refreshSession() {
+  if (!session?.refresh_token) return false;
+  const response = await fetch(`${SUPABASE_URL}/auth/v1/token?grant_type=refresh_token`, {
+    method: 'POST',
+    headers: { apikey: SUPABASE_PUBLIC_KEY, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ refresh_token: session.refresh_token }),
+  });
+  if (!response.ok) {
+    saveSession(null);
+    return false;
+  }
+  saveSession(await response.json());
+  return true;
+}
+
+async function supabaseRequest(path, options = {}, canRetry = true) {
+  if (!session?.access_token) throw new Error('AUTH_REQUIRED');
+  const response = await fetch(`${SUPABASE_URL}${path}`, {
+    ...options,
+    headers: {
+      apikey: SUPABASE_PUBLIC_KEY,
+      Authorization: `Bearer ${session.access_token}`,
+      'Content-Type': 'application/json',
+      ...options.headers,
+    },
+  });
+  if (response.status === 401 && canRetry && await refreshSession()) {
+    return supabaseRequest(path, options, false);
+  }
+  if (!response.ok) {
+    const details = await response.json().catch(() => ({}));
+    throw new Error(details.message || details.error_description || 'تعذر الاتصال بقاعدة البيانات.');
+  }
+  if (response.status === 204) return null;
+  return response.json();
+}
+
+function setRelationsBusy(isBusy) {
+  document.querySelector('.relations-form').classList.toggle('is-busy', isBusy);
+  document.querySelector('.relations-register').classList.toggle('is-busy', isBusy);
+}
+
+function updateAuthUi() {
+  const isSignedIn = Boolean(session?.access_token);
+  relationsAuth.hidden = isSignedIn;
+  relationsSession.hidden = !isSignedIn;
+  relationsWorkspace.hidden = !isSignedIn;
+  document.querySelector('#relations-user-email').textContent = session?.user?.email || '';
+  if (!isSignedIn) {
+    relations = [];
+    renderRelations();
+  }
 }
 
 function relationStatusClass(status) {
@@ -104,7 +161,7 @@ function renderRelations() {
       <td><span class="entity-cell"><strong>${escapeHtml(item.name)}</strong><small title="${escapeHtml(item.note)}">${escapeHtml(item.note)}</small></span></td>
       <td><span class="category-chip">${escapeHtml(item.category)}</span></td>
       <td>${escapeHtml(item.owner)}</td>
-      <td>${formatRelationDate(item.date)}</td>
+      <td>${formatRelationDate(item.follow_up_date)}</td>
       <td><span class="status-chip ${relationStatusClass(item.status)}">${escapeHtml(item.status)}</span></td>
       <td><span class="row-actions"><button class="row-btn" type="button" data-action="advance" data-id="${item.id}" title="تحديث الحالة" aria-label="تحديث حالة ${escapeHtml(item.name)}">↻</button><button class="row-btn delete" type="button" data-action="delete" data-id="${item.id}" title="حذف" aria-label="حذف ${escapeHtml(item.name)}">×</button></span></td>
     </tr>`).join('');
@@ -116,29 +173,110 @@ function renderRelations() {
   document.querySelector('#relations-count-label').textContent = `${visible.length} جهات مسجلة`;
 }
 
-document.querySelector('#relations-form').addEventListener('submit', (event) => {
+async function fetchRelations() {
+  if (!session?.access_token) return;
+  setRelationsBusy(true);
+  try {
+    relations = await supabaseRequest('/rest/v1/relations_contacts?select=id,name,category,owner,follow_up_date,status,note,created_at&order=created_at.desc');
+    renderRelations();
+  } catch (error) {
+    if (error.message === 'AUTH_REQUIRED' || !session) updateAuthUi();
+    else document.querySelector('.relations-form-status').textContent = error.message;
+  } finally {
+    setRelationsBusy(false);
+  }
+}
+
+document.querySelector('#relations-login-form').addEventListener('submit', async (event) => {
+  event.preventDefault();
+  authStatus.textContent = 'جارٍ تسجيل الدخول...';
+  const fields = new FormData(event.currentTarget);
+  const response = await fetch(`${SUPABASE_URL}/auth/v1/token?grant_type=password`, {
+    method: 'POST',
+    headers: { apikey: SUPABASE_PUBLIC_KEY, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email: fields.get('email'), password: fields.get('password') }),
+  }).catch(() => null);
+  if (!response?.ok) {
+    authStatus.textContent = 'بيانات الدخول غير صحيحة أو تعذر الاتصال.';
+    return;
+  }
+  saveSession(await response.json());
+  authStatus.textContent = '';
+  event.currentTarget.reset();
+  updateAuthUi();
+  await fetchRelations();
+});
+
+document.querySelector('#relations-form').addEventListener('submit', async (event) => {
   event.preventDefault();
   const formData = new FormData(event.currentTarget);
-  relations.unshift({ id: Date.now(), ...Object.fromEntries(formData.entries()) });
-  persistRelations();
-  renderRelations();
-  event.currentTarget.reset();
-  event.currentTarget.querySelector('.relations-form-status').textContent = 'تم حفظ جهة التواصل بنجاح.';
+  const status = event.currentTarget.querySelector('.relations-form-status');
+  setRelationsBusy(true);
+  try {
+    await supabaseRequest('/rest/v1/relations_contacts', {
+      method: 'POST',
+      headers: { Prefer: 'return=minimal' },
+      body: JSON.stringify({
+        name: formData.get('name'),
+        category: formData.get('category'),
+        owner: formData.get('owner'),
+        follow_up_date: formData.get('date'),
+        status: formData.get('status'),
+        note: formData.get('note'),
+      }),
+    });
+    event.currentTarget.reset();
+    status.textContent = 'تم الحفظ في السجل المشترك.';
+    await fetchRelations();
+  } catch (error) {
+    status.textContent = error.message;
+  } finally {
+    setRelationsBusy(false);
+  }
 });
 
 relationsSearch.addEventListener('input', renderRelations);
 relationsFilter.addEventListener('change', renderRelations);
-relationsBody.addEventListener('click', (event) => {
+relationsBody.addEventListener('click', async (event) => {
   const button = event.target.closest('[data-action]');
   if (!button) return;
   const id = Number(button.dataset.id);
-  if (button.dataset.action === 'delete') relations = relations.filter((item) => item.id !== id);
-  if (button.dataset.action === 'advance') {
-    const statuses = ['جديدة', 'قيد التواصل', 'تم التواصل', 'تأكيد الحضور'];
-    relations = relations.map((item) => item.id === id ? { ...item, status: statuses[(statuses.indexOf(item.status) + 1) % statuses.length] } : item);
+  setRelationsBusy(true);
+  try {
+    if (button.dataset.action === 'delete') {
+      await supabaseRequest(`/rest/v1/relations_contacts?id=eq.${id}`, { method: 'DELETE' });
+    }
+    if (button.dataset.action === 'advance') {
+      const statuses = ['جديدة', 'قيد التواصل', 'تم التواصل', 'تأكيد الحضور'];
+      const item = relations.find((entry) => entry.id === id);
+      const nextStatus = statuses[(statuses.indexOf(item.status) + 1) % statuses.length];
+      await supabaseRequest(`/rest/v1/relations_contacts?id=eq.${id}`, {
+        method: 'PATCH',
+        headers: { Prefer: 'return=minimal' },
+        body: JSON.stringify({ status: nextStatus, updated_at: new Date().toISOString() }),
+      });
+    }
+    await fetchRelations();
+  } catch (error) {
+    document.querySelector('.relations-form-status').textContent = error.message;
+  } finally {
+    setRelationsBusy(false);
   }
-  persistRelations();
-  renderRelations();
 });
 
-renderRelations();
+document.querySelector('#relations-refresh').addEventListener('click', fetchRelations);
+document.querySelector('#relations-logout').addEventListener('click', () => {
+  saveSession(null);
+  updateAuthUi();
+});
+
+document.addEventListener('visibilitychange', () => {
+  if (!document.hidden && session) fetchRelations();
+});
+
+setInterval(() => {
+  if (!document.hidden && session) fetchRelations();
+}, 30000);
+
+updateAuthUi();
+if (session) fetchRelations();
