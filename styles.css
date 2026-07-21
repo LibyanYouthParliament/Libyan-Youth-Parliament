@@ -32,3 +32,8 @@ footer{background:#080d0b;color:#fff;padding:32px max(24px,calc((100% - var(--ma
 footer .footer-brand{gap:13px}
 
 @media(max-width:560px){.brand-copy{display:none}.brand-logo-wrap{width:112px;height:48px}}
+
+/* Fast-loading system typography and optimized hero media */
+body,h1,h2,h3,.brand,footer strong{font-family:Tahoma,Arial,sans-serif}
+.brand-copy small{font-family:Tahoma,Arial,sans-serif}
+.hero{background-image:url("assets/forum-hero-optimized.jpg")}
