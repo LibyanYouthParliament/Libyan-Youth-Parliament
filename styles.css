@@ -51,3 +51,14 @@ body,h1,h2,h3,.brand,footer strong{font-family:Tahoma,Arial,sans-serif}
   .hero-meta strong{font-size:11px}
   .meta-icon{font-size:20px}
 }
+
+@media(max-width:700px){
+  body{overflow-x:hidden}
+  .relations-system{width:100%;overflow:hidden}
+  .system-head,.system-stats,.system-workspace{width:100%;min-width:0}
+  .system-workspace{grid-template-columns:minmax(0,1fr)}
+  .relations-form,.relations-register{width:100%;min-width:0}
+  .relations-form{grid-template-columns:minmax(0,1fr)}
+  .relations-form .field,.relations-form input,.relations-form select,.relations-form textarea{width:100%;min-width:0}
+  .register-toolbar,.register-controls,.search-control{min-width:0}
+}
